@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { Header } from '@/components/Header';
 import { ActionCard } from '@/components/ActionCard';
@@ -8,9 +8,11 @@ import { Input } from '@/components/ui/input';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Camera, Barcode, Upload, FileText, ArrowRight, X } from 'lucide-react';
+import { Camera, Barcode, Upload, FileText, ArrowRight, X, Loader2 } from 'lucide-react';
 import { parseIngredients, analyzeIngredients } from '@/utils/healthAnalyzer';
 import { barcodeDatabase } from '@/data/ingredientDatabase';
+import { useCamera } from '@/hooks/useCamera';
+import { performOCR, extractIngredientsFromText } from '@/utils/ocrService';
 
 type InputMode = null | 'camera' | 'barcode' | 'upload' | 'manual';
 
@@ -23,6 +25,27 @@ export default function Dashboard() {
   const [barcodeInput, setBarcodeInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [detectedIngredients, setDetectedIngredients] = useState<string[]>([]);
+  const [ocrProgress, setOcrProgress] = useState(0);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+
+  const { videoRef, canvasRef, isStreaming, error: cameraError, startCamera, stopCamera, captureImage } = useCamera();
+
+  // Start camera when mode is 'camera'
+  useEffect(() => {
+    if (inputMode === 'camera') {
+      startCamera();
+    } else {
+      stopCamera();
+      setCapturedImage(null);
+    }
+  }, [inputMode, startCamera, stopCamera]);
+
+  // Show camera error
+  useEffect(() => {
+    if (cameraError) {
+      toast.error(cameraError);
+    }
+  }, [cameraError]);
 
   if (!userProfile) {
     navigate('/user-info');
@@ -75,45 +98,88 @@ export default function Dashboard() {
     }, 1000);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const processImageWithOCR = async (imageSource: string | File) => {
+    setIsProcessing(true);
+    setOcrProgress(0);
+
+    try {
+      toast.info('Extracting text from image...');
+      
+      const ocrResult = await performOCR(imageSource, (progress) => {
+        setOcrProgress(progress);
+      });
+
+      if (ocrResult.confidence < 30) {
+        toast.warning('Low confidence in text detection. Please try with a clearer image.');
+      }
+
+      const ingredients = extractIngredientsFromText(ocrResult.text);
+      
+      if (ingredients.length === 0) {
+        // Try parsing raw text if extraction failed
+        const rawIngredients = parseIngredients(ocrResult.text);
+        if (rawIngredients.length > 0) {
+          setDetectedIngredients(rawIngredients);
+          toast.success(`Detected ${rawIngredients.length} ingredients`);
+        } else {
+          toast.error('Could not detect ingredients. Please try manual entry.');
+        }
+      } else {
+        setDetectedIngredients(ingredients);
+        toast.success(`Detected ${ingredients.length} ingredients`);
+      }
+    } catch (error) {
+      toast.error('Failed to process image. Please try again.');
+      console.error('OCR Error:', error);
+    } finally {
+      setIsProcessing(false);
+      setOcrProgress(0);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setIsProcessing(true);
-
     if (file.type === 'text/plain') {
       // Handle text file
+      setIsProcessing(true);
       const reader = new FileReader();
       reader.onload = (event) => {
         const text = event.target?.result as string;
         const ingredients = parseIngredients(text);
         setDetectedIngredients(ingredients);
         setIsProcessing(false);
+        if (ingredients.length > 0) {
+          toast.success(`Detected ${ingredients.length} ingredients`);
+        }
       };
       reader.readAsText(file);
     } else if (file.type.startsWith('image/')) {
-      // For images - simulate OCR (in real app, use Tesseract.js)
-      // Mock OCR result
-      setTimeout(() => {
-        const mockOcrResult = 'Sugar, Palm Oil, Refined Flour, Salt, Artificial Colors, Preservatives';
-        const ingredients = parseIngredients(mockOcrResult);
-        setDetectedIngredients(ingredients);
-        toast.info('OCR completed (demo mode)');
-        setIsProcessing(false);
-      }, 2000);
+      // Handle image with real OCR
+      await processImageWithOCR(file);
     }
   };
 
-  const handleCameraCapture = () => {
-    setIsProcessing(true);
-    // Simulate camera capture + OCR
-    setTimeout(() => {
-      const mockOcrResult = 'Whole Wheat Flour, Honey, Oats, Almonds, Salt';
-      const ingredients = parseIngredients(mockOcrResult);
-      setDetectedIngredients(ingredients);
-      toast.info('Image captured and processed (demo mode)');
-      setIsProcessing(false);
-    }, 2000);
+  const handleCameraCapture = async () => {
+    const imageDataUrl = captureImage();
+    
+    if (!imageDataUrl) {
+      toast.error('Failed to capture image. Please try again.');
+      return;
+    }
+
+    setCapturedImage(imageDataUrl);
+    stopCamera();
+    
+    // Process with OCR
+    await processImageWithOCR(imageDataUrl);
+  };
+
+  const handleRetakePhoto = () => {
+    setCapturedImage(null);
+    setDetectedIngredients([]);
+    startCamera();
   };
 
   const removeIngredient = (index: number) => {
@@ -125,6 +191,8 @@ export default function Dashboard() {
     setDetectedIngredients([]);
     setManualInput('');
     setBarcodeInput('');
+    setCapturedImage(null);
+    stopCamera();
   };
 
   const actionCards = [
@@ -246,10 +314,17 @@ export default function Dashboard() {
                       accept=".txt,.jpg,.jpeg,.png"
                       onChange={handleFileUpload}
                       className="cursor-pointer"
+                      disabled={isProcessing}
                     />
                     {isProcessing && (
-                      <div className="py-8">
-                        <LoadingSpinner text={t.processing} />
+                      <div className="py-8 space-y-4">
+                        <LoadingSpinner text={`${t.processing} ${ocrProgress}%`} />
+                        <div className="w-full bg-muted rounded-full h-2">
+                          <div 
+                            className="bg-primary h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${ocrProgress}%` }}
+                          />
+                        </div>
                       </div>
                     )}
                   </div>
@@ -258,23 +333,87 @@ export default function Dashboard() {
                 {inputMode === 'camera' && (
                   <div className="space-y-4">
                     <h2 className="text-xl font-semibold">{t.scanIngredients}</h2>
-                    <div className="aspect-video rounded-xl bg-muted flex items-center justify-center border-2 border-dashed border-border">
-                      {isProcessing ? (
-                        <LoadingSpinner text={t.scanning} />
+                    <p className="text-sm text-muted-foreground">
+                      Point your camera at the ingredient label and capture
+                    </p>
+                    
+                    <div className="relative aspect-video rounded-xl bg-muted overflow-hidden border-2 border-border">
+                      {/* Hidden canvas for capturing */}
+                      <canvas ref={canvasRef} className="hidden" />
+                      
+                      {/* Show captured image or live video */}
+                      {capturedImage ? (
+                        <img 
+                          src={capturedImage} 
+                          alt="Captured" 
+                          className="w-full h-full object-contain"
+                        />
                       ) : (
-                        <div className="text-center">
-                          <Camera className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
-                          <p className="text-sm text-muted-foreground">Camera preview (demo mode)</p>
+                        <video
+                          ref={videoRef}
+                          autoPlay
+                          playsInline
+                          muted
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                      
+                      {/* Loading overlay */}
+                      {isProcessing && (
+                        <div className="absolute inset-0 bg-background/80 flex flex-col items-center justify-center">
+                          <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
+                          <p className="text-sm text-muted-foreground">
+                            {t.scanning} {ocrProgress > 0 ? `${ocrProgress}%` : ''}
+                          </p>
+                          {ocrProgress > 0 && (
+                            <div className="w-48 bg-muted rounded-full h-2 mt-2">
+                              <div 
+                                className="bg-primary h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${ocrProgress}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      
+                      {/* Camera not streaming message */}
+                      {!isStreaming && !capturedImage && !isProcessing && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="text-center">
+                            <Camera className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+                            <p className="text-sm text-muted-foreground">
+                              {cameraError || 'Starting camera...'}
+                            </p>
+                          </div>
                         </div>
                       )}
                     </div>
-                    <Button 
-                      onClick={handleCameraCapture} 
-                      className="w-full"
-                      disabled={isProcessing}
-                    >
-                      {isProcessing ? t.capturing : t.captureImage}
-                    </Button>
+                    
+                    {capturedImage ? (
+                      <Button 
+                        onClick={handleRetakePhoto} 
+                        variant="outline"
+                        className="w-full"
+                        disabled={isProcessing}
+                      >
+                        {t.retake}
+                      </Button>
+                    ) : (
+                      <Button 
+                        onClick={handleCameraCapture} 
+                        className="w-full"
+                        disabled={!isStreaming || isProcessing}
+                      >
+                        {isProcessing ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            {t.capturing}
+                          </>
+                        ) : (
+                          t.captureImage
+                        )}
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
