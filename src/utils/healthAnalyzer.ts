@@ -69,11 +69,12 @@ function findIngredient(name: string): { key: string; info: IngredientInfo } | n
  */
 function determineRiskLevel(
   ingredientTags: string[],
-  userConditions: string[]
+  userConditions: string[],
+  ingredientRiskLevel?: 'low' | 'medium' | 'high'
 ): { level: RiskLevel; matchedTags: string[] } {
   const matchedTags: string[] = [];
-  let hasAvoid = false;
-  let hasCaution = false;
+  let avoidScore = 0;
+  let cautionScore = 0;
   
   for (const condition of userConditions) {
     const relevantTags = conditionTags[condition] || [];
@@ -82,24 +83,42 @@ function determineRiskLevel(
       if (relevantTags.includes(tag)) {
         matchedTags.push(tag);
         if (tag.startsWith('avoid')) {
-          hasAvoid = true;
+          avoidScore += 2;
         } else if (tag.startsWith('limit')) {
-          hasCaution = true;
+          cautionScore += 1;
         }
+      }
+      
+      // Check for condition-specific harmful tags
+      if (tag === 'high_glycemic' && (condition === 'diabetes' || condition === 'obesity' || condition === 'pcos')) {
+        avoidScore += 1;
+      }
+      if (tag === 'saturated_fat' && (condition === 'cholesterol' || condition === 'heartDisease')) {
+        cautionScore += 1;
+      }
+      if (tag === 'sodium' && condition === 'highBP') {
+        cautionScore += 1;
       }
     }
   }
   
   // Also check for universal avoid tags
   if (ingredientTags.includes('avoid_all') || ingredientTags.includes('trans_fat')) {
-    hasAvoid = true;
+    avoidScore += 3;
     matchedTags.push('avoid_all');
   }
   
+  // Consider ingredient's inherent risk level
+  if (ingredientRiskLevel === 'high') {
+    cautionScore += 1;
+  }
+  
   let level: RiskLevel = 'safe';
-  if (hasAvoid) {
+  if (avoidScore >= 2) {
     level = 'avoid';
-  } else if (hasCaution) {
+  } else if (avoidScore >= 1 || cautionScore >= 2) {
+    level = 'caution';
+  } else if (cautionScore >= 1) {
     level = 'caution';
   }
   
@@ -110,41 +129,67 @@ function determineRiskLevel(
  * Calculate health score based on analyzed ingredients
  * 
  * Score Formula:
- * - Start with 100 points
- * - Each "avoid" ingredient: -15 points
- * - Each "caution" ingredient: -5 points
- * - Each "safe" ingredient with positive tags: +2 points (max 20)
+ * - Start with base score based on overall composition
+ * - Each "avoid" ingredient: -20 points (severe penalty)
+ * - Each "caution" ingredient: -8 points
+ * - Each "safe" ingredient with positive tags: +3 points (max 15)
+ * - Unknown ingredients: -5 points each
+ * - Weighted by number of ingredients
  * - Minimum score: 0, Maximum: 100
  */
 function calculateHealthScore(ingredients: AnalyzedIngredient[]): number {
-  let score = 100;
-  let bonusPoints = 0;
+  if (ingredients.length === 0) return 50;
   
-  for (const ingredient of ingredients) {
-    if (!ingredient.found) {
-      // Unknown ingredients get slight penalty
-      score -= 3;
-      continue;
-    }
+  const avoidCount = ingredients.filter(i => i.riskLevel === 'avoid').length;
+  const cautionCount = ingredients.filter(i => i.riskLevel === 'caution').length;
+  const safeCount = ingredients.filter(i => i.riskLevel === 'safe').length;
+  const unknownCount = ingredients.filter(i => !i.found).length;
+  
+  // Calculate base score from ratios
+  const totalKnown = ingredients.length - unknownCount;
+  let score: number;
+  
+  if (totalKnown === 0) {
+    // All unknown - moderate score
+    score = 50 - (unknownCount * 5);
+  } else {
+    // Calculate weighted score based on composition
+    const avoidRatio = avoidCount / ingredients.length;
+    const cautionRatio = cautionCount / ingredients.length;
+    const safeRatio = safeCount / ingredients.length;
     
-    switch (ingredient.riskLevel) {
-      case 'avoid':
-        score -= 15;
-        break;
-      case 'caution':
-        score -= 5;
-        break;
-      case 'safe':
-        // Check for positive tags
-        if (ingredient.info?.tags.some(t => t.startsWith('good_for') || t === 'healthy_fat' || t === 'fiber' || t === 'antioxidant')) {
-          bonusPoints += 2;
+    // Base calculation: 100 - penalties
+    score = 100;
+    
+    // Apply penalties based on ratios (more impactful for higher ratios)
+    score -= avoidRatio * 60; // Up to -60 if all avoid
+    score -= cautionRatio * 25; // Up to -25 if all caution
+    
+    // Add bonuses for healthy ingredients
+    let bonusPoints = 0;
+    for (const ingredient of ingredients) {
+      if (ingredient.riskLevel === 'safe' && ingredient.info) {
+        const hasPositiveTags = ingredient.info.tags.some(t => 
+          t.startsWith('good_for') || 
+          t === 'healthy_fat' || 
+          t === 'fiber' || 
+          t === 'antioxidant' ||
+          t === 'whole_grain' ||
+          t === 'anti_inflammatory'
+        );
+        if (hasPositiveTags) {
+          bonusPoints += 3;
         }
-        break;
+      }
     }
+    score += Math.min(bonusPoints, 15);
+    
+    // Penalty for unknown ingredients
+    score -= unknownCount * 5;
+    
+    // Additional flat penalties for avoid items (they're particularly bad)
+    score -= avoidCount * 8;
   }
-  
-  // Apply bonus points (capped at 20)
-  score += Math.min(bonusPoints, 20);
   
   // Clamp between 0 and 100
   return Math.max(0, Math.min(100, Math.round(score)));
@@ -234,7 +279,11 @@ export function analyzeIngredients(
     const found = findIngredient(ingredient);
     
     if (found) {
-      const { level, matchedTags } = determineRiskLevel(found.info.tags, userConditions);
+      const { level, matchedTags } = determineRiskLevel(
+        found.info.tags, 
+        userConditions,
+        found.info.riskLevel
+      );
       
       return {
         name: found.info.name,
@@ -246,13 +295,25 @@ export function analyzeIngredients(
       };
     }
     
-    // Unknown ingredient
+    // Unknown ingredient - try to guess based on common keywords
+    const lowerName = ingredient.toLowerCase();
+    let guessedRisk: RiskLevel = 'caution';
+    
+    // Common unhealthy indicators
+    if (lowerName.includes('sugar') || lowerName.includes('syrup') || lowerName.includes('sweetener')) {
+      guessedRisk = 'avoid';
+    } else if (lowerName.includes('artificial') || lowerName.includes('color') || lowerName.includes('flavour')) {
+      guessedRisk = 'caution';
+    } else if (lowerName.includes('preservative') || lowerName.includes('hydrogenated')) {
+      guessedRisk = 'avoid';
+    }
+    
     return {
       name: ingredient,
       originalName: ingredient,
       found: false,
       info: null,
-      riskLevel: 'caution' as RiskLevel, // Unknown ingredients get caution by default
+      riskLevel: guessedRisk,
       matchedTags: [],
     };
   });
