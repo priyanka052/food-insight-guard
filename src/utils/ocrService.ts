@@ -38,14 +38,23 @@ export async function performOCR(
  * Handles common ingredient list formats
  */
 export function extractIngredientsFromText(text: string): string[] {
-  // Clean up the text
-  let cleanedText = text
-    .replace(/ingredients\s*:?/gi, '') // Remove "Ingredients:" label
-    .replace(/contains\s*:?/gi, '')    // Remove "Contains:" label
-    .replace(/\n+/g, ', ')             // Replace newlines with commas
-    .replace(/[()[\]{}]/g, '')         // Remove brackets
-    .replace(/\d+%?\s*/g, '')          // Remove percentages and numbers
-    .replace(/\s+/g, ' ')              // Normalize spaces
+  // First, try to find the ingredients section
+  let ingredientsText = text;
+  
+  // Look for "Ingredients:" or similar markers
+  const ingredientsMatch = text.match(/ingredients?\s*:?\s*([\s\S]*?)(?:nutrition|allergen|contains|warning|storage|best before|manufactured|$)/i);
+  if (ingredientsMatch) {
+    ingredientsText = ingredientsMatch[1];
+  }
+  
+  // Clean up the text more carefully
+  let cleanedText = ingredientsText
+    .replace(/ingredients?\s*:?/gi, '') // Remove "Ingredients:" label
+    .replace(/\n+/g, ', ')              // Replace newlines with commas
+    .replace(/[()[\]{}]/g, ' ')         // Replace brackets with spaces
+    .replace(/\d+\.?\d*\s*%/g, '')      // Remove percentages like "5%" or "0.5%"
+    .replace(/\d+\s*(mg|g|ml|l|kg|oz|iu)\b/gi, '') // Remove measurements
+    .replace(/\s+/g, ' ')               // Normalize spaces
     .trim();
 
   // Split by common delimiters
@@ -53,15 +62,31 @@ export function extractIngredientsFromText(text: string): string[] {
     .split(/[,;•·\|]+/)
     .map(item => item.trim())
     .filter(item => {
-      // Filter out empty items and common non-ingredient words
-      if (!item || item.length < 2 || item.length > 50) return false;
-      const skipWords = ['and', 'or', 'the', 'with', 'may contain', 'traces', 'less than'];
-      return !skipWords.some(word => item.toLowerCase() === word);
+      // Filter out empty items
+      if (!item || item.length < 2) return false;
+      // Filter out very long items (likely not ingredients)
+      if (item.length > 60) return false;
+      // Filter out common non-ingredient words
+      const skipWords = ['and', 'or', 'the', 'with', 'from', 'may contain', 'traces', 'less than', 'for', 'as', 'of'];
+      if (skipWords.some(word => item.toLowerCase() === word)) return false;
+      // Filter out items that are mostly numbers
+      if (item.replace(/[^a-zA-Z]/g, '').length < 2) return false;
+      return true;
     })
     .map(item => {
-      // Capitalize first letter
-      return item.charAt(0).toUpperCase() + item.slice(1).toLowerCase();
-    });
+      // Clean up each ingredient
+      let cleaned = item
+        .replace(/^\s*(and|or)\s+/i, '') // Remove leading "and" or "or"
+        .replace(/\s+(and|or)\s*$/i, '') // Remove trailing "and" or "or"
+        .trim();
+      
+      // Capitalize first letter, rest lowercase
+      if (cleaned.length > 0) {
+        return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
+      }
+      return cleaned;
+    })
+    .filter(item => item.length >= 2); // Final filter for short items
 
   return [...new Set(ingredients)]; // Remove duplicates
 }
