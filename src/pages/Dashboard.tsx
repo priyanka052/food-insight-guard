@@ -94,7 +94,13 @@ export default function Dashboard() {
       
       if (result.success && result.product) {
         toast.success(`Found: ${result.product.name} (${result.product.brand})`);
-        setDetectedIngredients(result.product.ingredients);
+        // Auto-analyze and navigate to results
+        const ingredients = result.product.ingredients;
+        if (ingredients.length > 0) {
+          handleAnalyze(ingredients);
+        } else {
+          setDetectedIngredients(ingredients);
+        }
       } else {
         toast.error(result.error || 'Product not found');
       }
