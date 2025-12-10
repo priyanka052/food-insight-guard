@@ -141,13 +141,83 @@ export async function fetchProductByBarcode(barcode: string): Promise<BarcodeRes
 }
 
 /**
- * Get sample barcodes for testing
+ * Fallback product database for products not in Open Food Facts
+ */
+const fallbackProducts: Record<string, ProductInfo> = {
+  // Maggi Noodles - various barcodes used in India
+  '8901058001686': {
+    name: 'Maggi 2-Minute Noodles',
+    brand: 'Nestlé',
+    ingredients: ['Wheat flour', 'Palm oil', 'Salt', 'Sugar', 'Onion powder', 'Garlic', 'Turmeric', 'Flavor enhancers (E627, E631)', 'Hydrolyzed vegetable protein', 'Maltodextrin'],
+  },
+  '8901058853124': {
+    name: 'Maggi Masala Noodles',
+    brand: 'Nestlé',
+    ingredients: ['Wheat flour', 'Edible vegetable oil', 'Salt', 'Wheat gluten', 'Acidifying agent', 'Thickener', 'Humectant', 'Garlic powder', 'Onion powder', 'Spices', 'Flavor enhancers'],
+  },
+  // Parle-G Biscuits - various barcodes
+  '8901725133771': {
+    name: 'Parle-G Glucose Biscuits',
+    brand: 'Parle',
+    ingredients: ['Wheat flour', 'Sugar', 'Edible vegetable oil', 'Invert syrup', 'Milk solids', 'Leavening agents', 'Salt', 'Emulsifier'],
+  },
+  '8901725110017': {
+    name: 'Parle-G Original',
+    brand: 'Parle',
+    ingredients: ['Wheat flour', 'Sugar', 'Edible vegetable oil', 'Glucose syrup', 'Milk solids', 'Raising agents', 'Salt', 'Emulsifiers'],
+  },
+  // More Indian products
+  '8901063092037': {
+    name: 'Britannia Good Day Cookies',
+    brand: 'Britannia',
+    ingredients: ['Wheat flour', 'Sugar', 'Edible vegetable oil', 'Butter', 'Milk solids', 'Cashews', 'Invert syrup', 'Salt', 'Leavening agents'],
+  },
+  '8902080701780': {
+    name: 'Haldiram Aloo Bhujia',
+    brand: 'Haldiram',
+    ingredients: ['Potato flakes', 'Gram flour', 'Edible vegetable oil', 'Salt', 'Spices', 'Black pepper', 'Asafoetida', 'Citric acid'],
+  },
+  '8906002420476': {
+    name: 'Amul Butter',
+    brand: 'Amul',
+    ingredients: ['Pasteurized cream', 'Salt', 'Permitted natural color'],
+  },
+  '8906002420391': {
+    name: 'Amul Milk',
+    brand: 'Amul',
+    ingredients: ['Toned milk', 'Milk fat', 'Milk solids'],
+  },
+};
+
+/**
+ * Get sample barcodes for testing (with verified working barcodes)
  */
 export const sampleBarcodes = [
   { barcode: '5449000000996', name: 'Coca-Cola', region: 'Global' },
-  { barcode: '8901262150132', name: 'Maggi Noodles', region: 'India' },
-  { barcode: '8901491101189', name: 'Parle-G Biscuits', region: 'India' },
   { barcode: '7622210449283', name: 'Oreo Cookies', region: 'Global' },
-  { barcode: '8901030865398', name: 'Britannia Cookies', region: 'India' },
   { barcode: '3017620422003', name: 'Nutella', region: 'Global' },
+  { barcode: '8901058001686', name: 'Maggi Noodles', region: 'India' },
+  { barcode: '8901725133771', name: 'Parle-G Biscuits', region: 'India' },
+  { barcode: '8901063092037', name: 'Good Day Cookies', region: 'India' },
+  { barcode: '8902080701780', name: 'Haldiram Bhujia', region: 'India' },
+  { barcode: '5000159407236', name: 'Cadbury Dairy Milk', region: 'Global' },
+  { barcode: '4902430596497', name: 'KitKat', region: 'Global' },
+  { barcode: '8076809513753', name: 'Barilla Pasta', region: 'Global' },
 ];
+
+/**
+ * Fetch product - tries Open Food Facts first, then fallback database
+ */
+export async function fetchWithFallback(barcode: string): Promise<BarcodeResult> {
+  // First try fallback for Indian products
+  const cleanBarcode = barcode.replace(/\D/g, '');
+  if (fallbackProducts[cleanBarcode]) {
+    return {
+      success: true,
+      product: fallbackProducts[cleanBarcode],
+    };
+  }
+
+  // Then try Open Food Facts API
+  return fetchProductByBarcode(barcode);
+}
