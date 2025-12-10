@@ -10,9 +10,9 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Camera, Barcode, Upload, FileText, ArrowRight, X, Loader2 } from 'lucide-react';
 import { parseIngredients, analyzeIngredients } from '@/utils/healthAnalyzer';
-import { barcodeDatabase } from '@/data/ingredientDatabase';
 import { useCamera } from '@/hooks/useCamera';
 import { performOCR, extractIngredientsFromText } from '@/utils/ocrService';
+import { fetchProductByBarcode, sampleBarcodes } from '@/services/barcodeService';
 
 type InputMode = null | 'camera' | 'barcode' | 'upload' | 'manual';
 
@@ -81,21 +81,28 @@ export default function Dashboard() {
     setDetectedIngredients(ingredients);
   };
 
-  const handleBarcodeSubmit = () => {
+  const handleBarcodeSubmit = async () => {
+    if (!barcodeInput.trim()) {
+      toast.error('Please enter a barcode number');
+      return;
+    }
+
     setIsProcessing(true);
     
-    // Simulate barcode lookup
-    setTimeout(() => {
-      const product = barcodeDatabase[barcodeInput] || barcodeDatabase['8901234567890'];
+    try {
+      const result = await fetchProductByBarcode(barcodeInput);
       
-      if (product) {
-        toast.success(`Found: ${product.name}`);
-        setDetectedIngredients(product.ingredients);
+      if (result.success && result.product) {
+        toast.success(`Found: ${result.product.name} (${result.product.brand})`);
+        setDetectedIngredients(result.product.ingredients);
       } else {
-        toast.error('Product not found. Try sample barcode: 8901234567890');
+        toast.error(result.error || 'Product not found');
       }
+    } catch (error) {
+      toast.error('Failed to fetch product data. Please try again.');
+    } finally {
       setIsProcessing(false);
-    }, 1000);
+    }
   };
 
   const processImageWithOCR = async (imageSource: string | File) => {
@@ -286,19 +293,38 @@ export default function Dashboard() {
                   <div className="space-y-4">
                     <h2 className="text-xl font-semibold">{t.scanBarcode}</h2>
                     <p className="text-sm text-muted-foreground">
-                      Enter barcode number or try sample: 8901234567890
+                      Enter barcode number to fetch product ingredients from Open Food Facts
                     </p>
                     <Input
-                      placeholder="Enter barcode number..."
+                      placeholder="Enter barcode number (e.g., 5449000000996)"
                       value={barcodeInput}
                       onChange={(e) => setBarcodeInput(e.target.value)}
+                      type="tel"
+                      inputMode="numeric"
                     />
+                    
+                    {/* Sample barcodes */}
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">Try these sample barcodes:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {sampleBarcodes.slice(0, 4).map((sample) => (
+                          <button
+                            key={sample.barcode}
+                            onClick={() => setBarcodeInput(sample.barcode)}
+                            className="text-xs px-2 py-1 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
+                          >
+                            {sample.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    
                     <Button 
                       onClick={handleBarcodeSubmit} 
                       className="w-full"
-                      disabled={isProcessing}
+                      disabled={isProcessing || !barcodeInput.trim()}
                     >
-                      {isProcessing ? <LoadingSpinner size="sm" /> : t.analyze}
+                      {isProcessing ? <LoadingSpinner size="sm" /> : 'Search Product'}
                     </Button>
                   </div>
                 )}
