@@ -7,7 +7,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Share2, MessageCircle, Instagram, Send, Copy, Check, Facebook, Twitter, Mail } from 'lucide-react';
+import { Share2, MessageCircle, Instagram, Send, Copy, Check, Facebook, Twitter, Mail, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ShareDialogProps {
@@ -49,6 +49,15 @@ export function ShareDialog({ title, text, score }: ShareDialogProps) {
       icon: Twitter,
       color: 'bg-sky-500 hover:bg-sky-600',
       action: () => window.open(`https://twitter.com/intent/tweet?text=${encodedMessage}`, '_blank'),
+    },
+    {
+      name: 'Snapchat',
+      icon: Camera,
+      color: 'bg-yellow-400 hover:bg-yellow-500 text-black',
+      action: () => {
+        navigator.clipboard.writeText(shareMessage);
+        toast.success('Copied! Open Snapchat and paste in a snap or chat');
+      },
     },
     {
       name: 'Email',

@@ -7,6 +7,7 @@ import { IngredientTag } from '@/components/IngredientTag';
 import { HealthScoreGauge } from '@/components/HealthScoreGauge';
 import { MealSuggestions } from '@/components/MealSuggestions';
 import { ShareDialog } from '@/components/ShareDialog';
+import { QRCodeShare } from '@/components/QRCodeShare';
 import { HealthIconBadge, healthIconsMap } from '@/components/HealthIcons';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip } from 'recharts';
 import { ArrowLeft, AlertTriangle, CheckCircle, XCircle, Lightbulb, RefreshCw, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
@@ -270,6 +271,12 @@ export default function Results() {
               title="My Health Analysis"
               text={`${scoreMessage.text} - ${result.summary}`}
               score={result.healthScore}
+            />
+            <QRCodeShare
+              title="My Health Analysis"
+              score={result.healthScore}
+              ingredients={ingredients}
+              summary={result.summary}
             />
           </div>
 
