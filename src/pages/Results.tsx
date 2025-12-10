@@ -20,11 +20,26 @@ export default function Results() {
     return null;
   }
 
+  // Get computed CSS colors for chart
+  const getComputedColor = (varName: string): string => {
+    if (typeof window !== 'undefined') {
+      const hsl = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+      if (hsl) return `hsl(${hsl})`;
+    }
+    // Fallback colors
+    const fallbacks: Record<string, string> = {
+      '--safe': 'hsl(142, 71%, 45%)',
+      '--caution': 'hsl(45, 93%, 47%)',
+      '--avoid': 'hsl(0, 84%, 60%)',
+    };
+    return fallbacks[varName] || 'hsl(0, 0%, 50%)';
+  };
+
   // Prepare chart data
   const chartData = [
-    { name: t.safe, count: result.ingredients.filter(i => i.riskLevel === 'safe').length, color: 'hsl(var(--safe))' },
-    { name: t.caution, count: result.ingredients.filter(i => i.riskLevel === 'caution').length, color: 'hsl(var(--caution))' },
-    { name: t.avoid, count: result.ingredients.filter(i => i.riskLevel === 'avoid').length, color: 'hsl(var(--avoid))' },
+    { name: t.safe, count: result.ingredients.filter(i => i.riskLevel === 'safe').length, color: getComputedColor('--safe') },
+    { name: t.caution, count: result.ingredients.filter(i => i.riskLevel === 'caution').length, color: getComputedColor('--caution') },
+    { name: t.avoid, count: result.ingredients.filter(i => i.riskLevel === 'avoid').length, color: getComputedColor('--avoid') },
   ];
 
   return (
