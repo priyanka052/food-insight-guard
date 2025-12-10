@@ -1,6 +1,6 @@
-import { Coffee, Utensils, Moon, Cookie, Heart, Bone, Brain, Flame, Droplets, Shield, Lightbulb, RefreshCw } from 'lucide-react';
+import { Coffee, Utensils, Moon, Cookie, Heart, Bone, Brain, Flame, Droplets, Shield, Lightbulb, RefreshCw, ChefHat } from 'lucide-react';
 import { useState, useMemo } from 'react';
-
+import { CompanionCookingMode } from './CompanionCookingMode';
 interface MealPlan {
   breakfast: string[];
   lunch: string[];
@@ -254,6 +254,8 @@ interface MealSuggestionsProps {
 export function MealSuggestions({ conditions }: MealSuggestionsProps) {
   const [mealTypeFilter, setMealTypeFilter] = useState<'breakfast' | 'lunch' | 'dinner' | 'snacks'>('breakfast');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showCookingMode, setShowCookingMode] = useState(false);
+  const [cookingMealType, setCookingMealType] = useState<'breakfast' | 'lunch' | 'dinner' | 'snacks'>('breakfast');
 
   const conditionMap: Record<string, string> = {
     'Hypertension': 'high_bp',
@@ -364,8 +366,55 @@ export function MealSuggestions({ conditions }: MealSuggestionsProps) {
     return entry ? entry[0] : c.charAt(0).toUpperCase() + c.slice(1);
   });
 
+  const handleStartCooking = (mealType: 'breakfast' | 'lunch' | 'dinner' | 'snacks') => {
+    setCookingMealType(mealType);
+    setShowCookingMode(true);
+  };
+
+  // Show Companion Cooking Mode
+  if (showCookingMode) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
+        <CompanionCookingMode 
+          mealType={cookingMealType} 
+          onClose={() => setShowCookingMode(false)} 
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {/* Companion Cooking Mode Banner */}
+      <div className="rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/10 via-card to-accent/10 p-6 shadow-card">
+        <div className="flex items-center gap-4">
+          <div className="h-14 w-14 rounded-xl bg-primary/20 flex items-center justify-center">
+            <ChefHat className="h-7 w-7 text-primary" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-bold">🎙️ Companion Cooking Mode</h3>
+            <p className="text-sm text-muted-foreground">
+              Step-by-step voice-guided cooking for elder-friendly meals
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2 mt-4">
+          {(['breakfast', 'lunch', 'dinner', 'snacks'] as const).map((type) => (
+            <button
+              key={type}
+              onClick={() => handleStartCooking(type)}
+              className="px-4 py-2 rounded-full bg-primary/10 hover:bg-primary/20 text-primary font-medium text-sm transition-all flex items-center gap-2"
+            >
+              {type === 'breakfast' && <Coffee className="h-4 w-4" />}
+              {type === 'lunch' && <Utensils className="h-4 w-4" />}
+              {type === 'dinner' && <Moon className="h-4 w-4" />}
+              {type === 'snacks' && <Cookie className="h-4 w-4" />}
+              Cook {type.charAt(0).toUpperCase() + type.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Auto-Generated Meal Ideas Section */}
       {mappedConditions.length > 0 && (
         <div className="rounded-2xl border border-border bg-gradient-to-br from-primary/5 via-background to-accent/5 p-6 shadow-card">
