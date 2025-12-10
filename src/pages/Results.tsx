@@ -139,12 +139,18 @@ export default function Results() {
               </span>
             </h2>
             
+            <p className="text-sm text-muted-foreground mb-4">
+              Tap any ingredient to see why it's classified based on your health conditions
+            </p>
             <div className="flex flex-wrap gap-2">
               {result.ingredients.map((ingredient, index) => (
                 <IngredientTag
                   key={index}
                   name={ingredient.name}
                   riskLevel={ingredient.riskLevel}
+                  matchedTags={ingredient.matchedTags}
+                  userConditions={userConditions}
+                  showDescription={true}
                 />
               ))}
             </div>
