@@ -2,6 +2,7 @@ import { useApp } from '@/contexts/AppContext';
 import { Header } from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { HealthScoreGauge } from '@/components/HealthScoreGauge';
+import { HistoryAnalytics } from '@/components/HistoryAnalytics';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Trash2, Clock, ChevronRight } from 'lucide-react';
 import { analyzeIngredients } from '@/utils/healthAnalyzer';
@@ -31,7 +32,7 @@ export default function History() {
       <Header />
       
       <main className="flex-1 container mx-auto px-4 py-8">
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-4">
@@ -61,6 +62,9 @@ export default function History() {
             )}
           </div>
 
+          {/* Analytics Section */}
+          <HistoryAnalytics />
+
           {/* History List */}
           {history.length === 0 ? (
             <div className="text-center py-16">
@@ -75,7 +79,8 @@ export default function History() {
               </Button>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="mt-8 space-y-4">
+              <h3 className="text-lg font-semibold text-foreground">📋 Scan History</h3>
               {history.map((item) => (
                 <button
                   key={item.id}

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { Header } from '@/components/Header';
@@ -5,15 +6,17 @@ import { Button } from '@/components/ui/button';
 import { IngredientTag } from '@/components/IngredientTag';
 import { HealthScoreGauge } from '@/components/HealthScoreGauge';
 import { MealSuggestions } from '@/components/MealSuggestions';
+import { ShareDialog } from '@/components/ShareDialog';
 import { HealthIconBadge, healthIconsMap } from '@/components/HealthIcons';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip } from 'recharts';
-import { ArrowLeft, AlertTriangle, CheckCircle, XCircle, Lightbulb, RefreshCw, Share2, Download, Sparkles } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, CheckCircle, XCircle, Lightbulb, RefreshCw, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
 import type { AnalysisResult } from '@/utils/healthAnalyzer';
 
 export default function Results() {
   const location = useLocation();
   const navigate = useNavigate();
   const { t, userProfile } = useApp();
+  const [showMealSuggestions, setShowMealSuggestions] = useState(false);
   
   const { result, ingredients } = (location.state as { result: AnalysisResult; ingredients: string[] }) || {};
 
@@ -176,9 +179,35 @@ export default function Results() {
             )}
           </div>
 
-          {/* Daily Meal Suggestions - NEW FEATURE */}
+          {/* Daily Meal Suggestions Toggle */}
           <div className="mb-8">
-            <MealSuggestions conditions={userConditions} />
+            <button
+              onClick={() => setShowMealSuggestions(!showMealSuggestions)}
+              className="w-full rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/5 via-card to-accent/5 p-6 shadow-card transition-all hover:shadow-lg group"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="h-14 w-14 rounded-xl bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <span className="text-3xl">🍽️</span>
+                  </div>
+                  <div className="text-left">
+                    <h3 className="text-lg font-bold text-foreground">Daily Safe Meal Suggestions</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Personalized meals based on your {userConditions.length} health condition{userConditions.length !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                </div>
+                <div className={`p-2 rounded-full bg-primary/10 transition-transform ${showMealSuggestions ? 'rotate-180' : ''}`}>
+                  <ChevronDown className="h-5 w-5 text-primary" />
+                </div>
+              </div>
+            </button>
+            
+            {showMealSuggestions && (
+              <div className="mt-4 animate-slide-up">
+                <MealSuggestions conditions={userConditions} />
+              </div>
+            )}
           </div>
 
           {/* Diet Suggestions - Enhanced */}
@@ -237,22 +266,11 @@ export default function Results() {
               <RefreshCw className="h-5 w-5" />
               {t.scanAnother}
             </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              className="gap-2"
-              onClick={() => {
-                if (navigator.share) {
-                  navigator.share({
-                    title: 'My Health Analysis',
-                    text: `Health Score: ${result.healthScore}% - ${scoreMessage.text}`,
-                  });
-                }
-              }}
-            >
-              <Share2 className="h-5 w-5" />
-              Share Results
-            </Button>
+            <ShareDialog
+              title="My Health Analysis"
+              text={`${scoreMessage.text} - ${result.summary}`}
+              score={result.healthScore}
+            />
           </div>
 
           {/* Disclaimer - Enhanced */}
