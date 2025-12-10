@@ -3,6 +3,7 @@ import { Header } from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { Shield, Scan, Heart, Sparkles } from 'lucide-react';
+import healthyFoodBg from '@/assets/healthy-food-bg.jpg';
 
 export default function Landing() {
   const { t, setIsGuest } = useApp();
@@ -38,8 +39,12 @@ export default function Landing() {
       {/* Hero Section */}
       <main className="flex-1">
         <section className="relative overflow-hidden">
-          {/* Background Gradient */}
-          <div className="absolute inset-0 gradient-hero" />
+          {/* Background Image with Overlay */}
+          <div 
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+            style={{ backgroundImage: `url(${healthyFoodBg})` }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/95 via-background/80 to-background" />
           
           {/* Decorative Elements */}
           <div className="absolute top-20 left-10 w-72 h-72 bg-primary/10 rounded-full blur-3xl" />
@@ -48,7 +53,7 @@ export default function Landing() {
           <div className="container relative mx-auto px-4 py-16 sm:py-24">
             <div className="flex flex-col items-center text-center">
               {/* Badge */}
-              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-2 text-sm font-medium text-primary animate-fade-in">
+              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-2 text-sm font-medium text-primary animate-fade-in backdrop-blur-sm">
                 <Sparkles className="h-4 w-4" />
                 Your Personal Nutrition Guardian
               </div>
@@ -87,39 +92,26 @@ export default function Landing() {
               <div className="relative">
                 {/* Food Image Grid */}
                 <div className="grid grid-cols-3 gap-4 max-w-lg">
-                  <div className="aspect-square rounded-2xl bg-gradient-to-br from-green-400/20 to-green-500/30 flex items-center justify-center overflow-hidden shadow-lg animate-float">
+                  <div className="aspect-square rounded-2xl bg-gradient-to-br from-green-400/20 to-green-500/30 flex items-center justify-center overflow-hidden shadow-lg animate-float backdrop-blur-sm">
                     <img 
                       src="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=200&h=200&fit=crop"
                       alt="Healthy salad"
                       className="w-full h-full object-cover"
                     />
                   </div>
-                  <div className="aspect-square rounded-2xl bg-gradient-to-br from-orange-400/20 to-orange-500/30 flex items-center justify-center overflow-hidden shadow-lg animate-float" style={{ animationDelay: '0.5s' }}>
+                  <div className="aspect-square rounded-2xl bg-gradient-to-br from-orange-400/20 to-orange-500/30 flex items-center justify-center overflow-hidden shadow-lg animate-float backdrop-blur-sm" style={{ animationDelay: '0.5s' }}>
                     <img 
                       src="https://images.unsplash.com/photo-1490474418585-ba9bad8fd0ea?w=200&h=200&fit=crop"
                       alt="Fresh fruits"
                       className="w-full h-full object-cover"
                     />
                   </div>
-                  <div className="aspect-square rounded-2xl bg-gradient-to-br from-teal-400/20 to-teal-500/30 flex items-center justify-center overflow-hidden shadow-lg animate-float" style={{ animationDelay: '1s' }}>
+                  <div className="aspect-square rounded-2xl bg-gradient-to-br from-teal-400/20 to-teal-500/30 flex items-center justify-center overflow-hidden shadow-lg animate-float backdrop-blur-sm" style={{ animationDelay: '1s' }}>
                     <img 
                       src="https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=200&h=200&fit=crop"
                       alt="Healthy meal"
                       className="w-full h-full object-cover"
                     />
-                  </div>
-                </div>
-                
-                {/* Floating Badge */}
-                <div className="absolute -right-4 top-1/2 -translate-y-1/2 rounded-xl bg-card shadow-lg p-3 border border-border animate-pulse-glow">
-                  <div className="flex items-center gap-2">
-                    <div className="h-10 w-10 rounded-full bg-safe/20 flex items-center justify-center">
-                      <Shield className="h-5 w-5 text-safe" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Protected</p>
-                      <p className="text-sm font-semibold text-foreground">100%</p>
-                    </div>
                   </div>
                 </div>
               </div>
