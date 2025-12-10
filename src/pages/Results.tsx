@@ -4,14 +4,16 @@ import { Header } from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { IngredientTag } from '@/components/IngredientTag';
 import { HealthScoreGauge } from '@/components/HealthScoreGauge';
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell } from 'recharts';
-import { ArrowLeft, AlertTriangle, CheckCircle, XCircle, Lightbulb, RefreshCw } from 'lucide-react';
+import { MealSuggestions } from '@/components/MealSuggestions';
+import { HealthIconBadge, healthIconsMap } from '@/components/HealthIcons';
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip } from 'recharts';
+import { ArrowLeft, AlertTriangle, CheckCircle, XCircle, Lightbulb, RefreshCw, Share2, Download, Sparkles } from 'lucide-react';
 import type { AnalysisResult } from '@/utils/healthAnalyzer';
 
 export default function Results() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { t } = useApp();
+  const { t, userProfile } = useApp();
   
   const { result, ingredients } = (location.state as { result: AnalysisResult; ingredients: string[] }) || {};
 
@@ -26,7 +28,6 @@ export default function Results() {
       const hsl = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
       if (hsl) return `hsl(${hsl})`;
     }
-    // Fallback colors
     const fallbacks: Record<string, string> = {
       '--safe': 'hsl(142, 71%, 45%)',
       '--caution': 'hsl(45, 93%, 47%)',
@@ -35,12 +36,23 @@ export default function Results() {
     return fallbacks[varName] || 'hsl(0, 0%, 50%)';
   };
 
-  // Prepare chart data
+  // Prepare chart data with emojis
   const chartData = [
-    { name: t.safe, count: result.ingredients.filter(i => i.riskLevel === 'safe').length, color: getComputedColor('--safe') },
-    { name: t.caution, count: result.ingredients.filter(i => i.riskLevel === 'caution').length, color: getComputedColor('--caution') },
-    { name: t.avoid, count: result.ingredients.filter(i => i.riskLevel === 'avoid').length, color: getComputedColor('--avoid') },
+    { name: `✅ ${t.safe}`, count: result.ingredients.filter(i => i.riskLevel === 'safe').length, color: getComputedColor('--safe') },
+    { name: `⚠️ ${t.caution}`, count: result.ingredients.filter(i => i.riskLevel === 'caution').length, color: getComputedColor('--caution') },
+    { name: `❌ ${t.avoid}`, count: result.ingredients.filter(i => i.riskLevel === 'avoid').length, color: getComputedColor('--avoid') },
   ];
+
+  // Get health score message with emoji
+  const getScoreMessage = () => {
+    if (result.healthScore >= 80) return { emoji: '🎉', text: 'Excellent Choice!', color: 'text-safe' };
+    if (result.healthScore >= 60) return { emoji: '👍', text: 'Good Choice', color: 'text-primary' };
+    if (result.healthScore >= 40) return { emoji: '⚠️', text: 'Use with Caution', color: 'text-caution' };
+    return { emoji: '🚫', text: 'Not Recommended', color: 'text-avoid' };
+  };
+
+  const scoreMessage = getScoreMessage();
+  const userConditions = userProfile?.selectedSymptoms || [];
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -57,33 +69,59 @@ export default function Results() {
             {t.back}
           </button>
 
-          {/* Health Score Section */}
-          <div className="mb-8 rounded-2xl border border-border bg-card p-8 shadow-card text-center">
-            <h1 className="text-2xl font-bold mb-6">{t.healthScoreFor}</h1>
+          {/* Health Score Section - Enhanced */}
+          <div className="mb-8 rounded-2xl border border-border bg-gradient-to-br from-card via-card to-primary/5 p-8 shadow-card text-center relative overflow-hidden">
+            {/* Decorative elements */}
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary/10 to-transparent rounded-full -translate-y-1/2 translate-x-1/2" />
+            <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-accent/10 to-transparent rounded-full translate-y-1/2 -translate-x-1/2" />
             
-            <div className="flex flex-col items-center gap-6 md:flex-row md:justify-center md:gap-12">
-              <HealthScoreGauge score={result.healthScore} size="lg" />
+            <div className="relative z-10">
+              <h1 className="text-2xl font-bold mb-2">{t.healthScoreFor}</h1>
+              <p className={`text-lg font-semibold ${scoreMessage.color} flex items-center justify-center gap-2`}>
+                <span className="text-2xl">{scoreMessage.emoji}</span>
+                {scoreMessage.text}
+              </p>
               
-              {/* Bar Chart */}
-              <div className="w-full max-w-xs h-48">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} layout="vertical">
-                    <XAxis type="number" hide />
-                    <YAxis 
-                      type="category" 
-                      dataKey="name" 
-                      axisLine={false}
-                      tickLine={false}
-                      width={70}
-                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-                    />
-                    <Bar dataKey="count" radius={[0, 8, 8, 0]}>
-                      {chartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+              <div className="flex flex-col items-center gap-6 md:flex-row md:justify-center md:gap-12 mt-6">
+                <HealthScoreGauge score={result.healthScore} size="lg" />
+                
+                {/* Enhanced Bar Chart */}
+                <div className="w-full max-w-xs h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData} layout="vertical">
+                      <XAxis type="number" hide />
+                      <YAxis 
+                        type="category" 
+                        dataKey="name" 
+                        axisLine={false}
+                        tickLine={false}
+                        width={90}
+                        tick={{ fill: 'hsl(var(--foreground))', fontSize: 12, fontWeight: 500 }}
+                      />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: 'hsl(var(--card))', 
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                          fontSize: '14px'
+                        }}
+                        formatter={(value) => [`${value} items`, 'Count']}
+                      />
+                      <Bar dataKey="count" radius={[0, 8, 8, 0]} animationDuration={1000}>
+                        {chartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Quick Health Icons Legend */}
+              <div className="flex flex-wrap justify-center gap-3 mt-6">
+                <HealthIconBadge iconInfo={healthIconsMap.heart} showEmoji size="sm" showLabel />
+                <HealthIconBadge iconInfo={healthIconsMap.brain} showEmoji size="sm" showLabel />
+                <HealthIconBadge iconInfo={healthIconsMap.bones} showEmoji size="sm" showLabel />
               </div>
             </div>
           </div>
@@ -108,12 +146,12 @@ export default function Results() {
             </div>
           </div>
 
-          {/* Summary & Concerns */}
+          {/* Summary & Concerns - Enhanced */}
           <div className="mb-8 grid gap-6 md:grid-cols-2">
             {/* Summary */}
-            <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
+            <div className="rounded-2xl border border-border bg-gradient-to-br from-safe/5 to-card p-6 shadow-card">
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-primary" />
+                <span className="text-xl">✅</span>
                 {t.summary}
               </h2>
               <p className="text-muted-foreground">{result.summary}</p>
@@ -121,9 +159,9 @@ export default function Results() {
 
             {/* Concerns */}
             {result.concerns.length > 0 && (
-              <div className="rounded-2xl border border-border bg-card p-6 shadow-card">
+              <div className="rounded-2xl border border-avoid/20 bg-gradient-to-br from-avoid/5 to-card p-6 shadow-card">
                 <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-caution" />
+                  <span className="text-xl">⚠️</span>
                   Key Concerns
                 </h2>
                 <ul className="space-y-2">
@@ -138,18 +176,27 @@ export default function Results() {
             )}
           </div>
 
-          {/* Diet Suggestions */}
-          <div className="mb-8 rounded-2xl border border-border bg-gradient-to-br from-primary/5 to-accent/5 p-6 shadow-card">
+          {/* Daily Meal Suggestions - NEW FEATURE */}
+          <div className="mb-8">
+            <MealSuggestions conditions={userConditions} />
+          </div>
+
+          {/* Diet Suggestions - Enhanced */}
+          <div className="mb-8 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 via-card to-accent/5 p-6 shadow-card relative overflow-hidden">
+            <div className="absolute top-4 right-4">
+              <Sparkles className="h-6 w-6 text-primary/30" />
+            </div>
+            
             <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
-              <Lightbulb className="h-6 w-6 text-accent" />
+              <span className="text-2xl">💡</span>
               {t.dietSuggestions}
             </h2>
             
             <div className="grid gap-6 md:grid-cols-2">
               {/* Foods to Include */}
-              <div>
+              <div className="p-4 rounded-xl bg-safe/5 border border-safe/20">
                 <h3 className="font-semibold text-safe mb-3 flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4" />
+                  <span className="text-lg">✅</span>
                   {t.foodsToInclude}
                 </h3>
                 <ul className="space-y-2">
@@ -163,9 +210,9 @@ export default function Results() {
               </div>
 
               {/* Foods to Avoid */}
-              <div>
+              <div className="p-4 rounded-xl bg-avoid/5 border border-avoid/20">
                 <h3 className="font-semibold text-avoid mb-3 flex items-center gap-2">
-                  <XCircle className="h-4 w-4" />
+                  <span className="text-lg">❌</span>
                   {t.foodsToAvoid}
                 </h3>
                 <ul className="space-y-2">
@@ -180,23 +227,42 @@ export default function Results() {
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex justify-center">
+          {/* Action Buttons - Enhanced */}
+          <div className="flex flex-wrap justify-center gap-4">
             <Button
               onClick={() => navigate('/dashboard')}
               size="lg"
-              className="gap-2"
+              className="gap-2 shadow-lg hover:shadow-xl transition-all"
             >
               <RefreshCw className="h-5 w-5" />
               {t.scanAnother}
             </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              className="gap-2"
+              onClick={() => {
+                if (navigator.share) {
+                  navigator.share({
+                    title: 'My Health Analysis',
+                    text: `Health Score: ${result.healthScore}% - ${scoreMessage.text}`,
+                  });
+                }
+              }}
+            >
+              <Share2 className="h-5 w-5" />
+              Share Results
+            </Button>
           </div>
 
-          {/* Disclaimer */}
-          <p className="mt-8 text-center text-xs text-muted-foreground">
-            This analysis is for educational purposes only and should not be considered medical advice.
-            Always consult with healthcare professionals for dietary decisions.
-          </p>
+          {/* Disclaimer - Enhanced */}
+          <div className="mt-8 p-4 rounded-xl bg-muted/50 text-center">
+            <p className="text-xs text-muted-foreground flex items-center justify-center gap-2">
+              <span>ℹ️</span>
+              This analysis is for educational purposes only and should not be considered medical advice.
+              Always consult with healthcare professionals for dietary decisions.
+            </p>
+          </div>
         </div>
       </main>
     </div>

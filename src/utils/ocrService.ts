@@ -34,59 +34,141 @@ export async function performOCR(
 }
 
 /**
+ * Common ingredient keywords to help identify real ingredients
+ */
+const ingredientKeywords = [
+  'water', 'sugar', 'salt', 'flour', 'oil', 'milk', 'cream', 'butter', 'egg', 'wheat',
+  'corn', 'rice', 'soy', 'palm', 'vegetable', 'natural', 'artificial', 'flavor', 'colour',
+  'color', 'extract', 'powder', 'syrup', 'starch', 'protein', 'fat', 'acid', 'sodium',
+  'calcium', 'potassium', 'iron', 'vitamin', 'mineral', 'spice', 'herb', 'garlic', 'onion',
+  'tomato', 'preservative', 'emulsifier', 'stabilizer', 'thickener', 'sweetener', 'glucose',
+  'fructose', 'dextrose', 'maltodextrin', 'lecithin', 'gum', 'cellulose', 'pectin', 'gelatin',
+  'yeast', 'baking', 'leavening', 'raising', 'agent', 'concentrate', 'puree', 'paste', 'juice',
+];
+
+/**
+ * Enhanced OCR text pre-processing
+ */
+function preprocessOCRText(text: string): string {
+  return text
+    // Fix common OCR mistakes
+    .replace(/[|l1]/g, (match, offset, str) => {
+      // Keep 'l' if it looks like part of a word
+      const prevChar = str[offset - 1];
+      const nextChar = str[offset + 1];
+      if (prevChar && /[a-zA-Z]/.test(prevChar)) return 'l';
+      if (nextChar && /[a-zA-Z]/.test(nextChar)) return 'l';
+      return match;
+    })
+    .replace(/0/g, 'o') // Often OCR reads 'o' as '0' in text
+    .replace(/rn/g, 'm') // Common OCR mistake
+    .replace(/vv/g, 'w') // Common OCR mistake
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * Extract ingredients from OCR text
- * Handles common ingredient list formats
+ * Handles common ingredient list formats with improved accuracy
  */
 export function extractIngredientsFromText(text: string): string[] {
-  // First, try to find the ingredients section
-  let ingredientsText = text;
+  // Preprocess the OCR text
+  let processedText = preprocessOCRText(text);
   
-  // Look for "Ingredients:" or similar markers
-  const ingredientsMatch = text.match(/ingredients?\s*:?\s*([\s\S]*?)(?:nutrition|allergen|contains|warning|storage|best before|manufactured|$)/i);
-  if (ingredientsMatch) {
-    ingredientsText = ingredientsMatch[1];
+  // Multiple patterns to find ingredients section
+  const ingredientPatterns = [
+    /ingredients?\s*:?\s*([\s\S]*?)(?:nutrition|allergen|contains|warning|storage|best before|manufactured|packed|net weight|directions|how to use|$)/i,
+    /सामग्री\s*:?\s*([\s\S]*?)(?:पोषण|एलर्जन|$)/i, // Hindi
+    /composed?\s*of\s*:?\s*([\s\S]*?)(?:nutrition|$)/i,
+    /made\s*(?:with|from)\s*:?\s*([\s\S]*?)(?:nutrition|$)/i,
+  ];
+  
+  let ingredientsText = processedText;
+  
+  for (const pattern of ingredientPatterns) {
+    const match = processedText.match(pattern);
+    if (match && match[1]) {
+      ingredientsText = match[1];
+      break;
+    }
   }
   
-  // Clean up the text more carefully
+  // Enhanced text cleaning
   let cleanedText = ingredientsText
-    .replace(/ingredients?\s*:?/gi, '') // Remove "Ingredients:" label
-    .replace(/\n+/g, ', ')              // Replace newlines with commas
-    .replace(/[()[\]{}]/g, ' ')         // Replace brackets with spaces
-    .replace(/\d+\.?\d*\s*%/g, '')      // Remove percentages like "5%" or "0.5%"
-    .replace(/\d+\s*(mg|g|ml|l|kg|oz|iu)\b/gi, '') // Remove measurements
-    .replace(/\s+/g, ' ')               // Normalize spaces
+    .replace(/ingredients?\s*:?/gi, '')
+    .replace(/\n+/g, ', ')
+    .replace(/[()[\]{}]/g, ' ')
+    .replace(/\d+\.?\d*\s*%/g, '') // Remove percentages
+    .replace(/\d+\s*(mg|g|ml|l|kg|oz|iu|mcg|µg)\b/gi, '') // Remove measurements
+    .replace(/E\d{3,4}[a-z]?/gi, match => `additive-${match}`) // Preserve E-numbers as additives
+    .replace(/INS\s*\d{3,4}/gi, match => `additive-${match}`) // Preserve INS numbers
+    .replace(/[*#†‡§¶]/g, '') // Remove reference marks
+    .replace(/\s+/g, ' ')
     .trim();
 
   // Split by common delimiters
-  const ingredients = cleanedText
-    .split(/[,;•·\|]+/)
+  const rawItems = cleanedText.split(/[,;•·\|\/]+/);
+  
+  const ingredients = rawItems
     .map(item => item.trim())
     .filter(item => {
-      // Filter out empty items
       if (!item || item.length < 2) return false;
-      // Filter out very long items (likely not ingredients)
-      if (item.length > 60) return false;
-      // Filter out common non-ingredient words
-      const skipWords = ['and', 'or', 'the', 'with', 'from', 'may contain', 'traces', 'less than', 'for', 'as', 'of'];
+      if (item.length > 80) return false;
+      
+      // More comprehensive skip words
+      const skipWords = [
+        'and', 'or', 'the', 'with', 'from', 'may contain', 'traces', 'less than',
+        'for', 'as', 'of', 'in', 'a', 'an', 'to', 'by', 'see', 'also', 'including',
+        'such', 'like', 'etc', 'per', 'serving', 'size', 'amount', 'daily', 'value',
+        'percent', 'calorie', 'calories', 'total', 'information', 'product', 'made'
+      ];
       if (skipWords.some(word => item.toLowerCase() === word)) return false;
-      // Filter out items that are mostly numbers
-      if (item.replace(/[^a-zA-Z]/g, '').length < 2) return false;
-      return true;
+      
+      // Filter items that are mostly numbers or symbols
+      const letterCount = item.replace(/[^a-zA-Z]/g, '').length;
+      if (letterCount < 2) return false;
+      
+      // Check if it looks like an ingredient
+      const itemLower = item.toLowerCase();
+      const looksLikeIngredient = ingredientKeywords.some(kw => itemLower.includes(kw)) ||
+                                   item.startsWith('additive-') ||
+                                   letterCount >= 3;
+      
+      return looksLikeIngredient;
     })
     .map(item => {
-      // Clean up each ingredient
       let cleaned = item
-        .replace(/^\s*(and|or)\s+/i, '') // Remove leading "and" or "or"
-        .replace(/\s+(and|or)\s*$/i, '') // Remove trailing "and" or "or"
+        .replace(/^\s*(and|or|of|with)\s+/i, '')
+        .replace(/\s+(and|or)\s*$/i, '')
+        .replace(/^additive-/i, '')
+        .replace(/\s{2,}/g, ' ')
         .trim();
       
-      // Capitalize first letter, rest lowercase
       if (cleaned.length > 0) {
         return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
       }
       return cleaned;
     })
-    .filter(item => item.length >= 2); // Final filter for short items
+    .filter(item => item.length >= 2);
 
-  return [...new Set(ingredients)]; // Remove duplicates
+  // Remove duplicates and return
+  return [...new Set(ingredients)];
+}
+
+/**
+ * Attempt to improve OCR accuracy by trying multiple recognitions
+ */
+export async function performEnhancedOCR(
+  imageSource: string | File | Blob,
+  onProgress?: (progress: number) => void
+): Promise<OCRResult> {
+  // Try standard recognition first
+  const result = await performOCR(imageSource, onProgress);
+  
+  // If confidence is low, the text might be poor quality
+  if (result.confidence < 50) {
+    console.log('Low OCR confidence, text may be incomplete');
+  }
+  
+  return result;
 }

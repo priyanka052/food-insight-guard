@@ -12,7 +12,7 @@ import { Camera, Barcode, Upload, FileText, ArrowRight, X, Loader2 } from 'lucid
 import { parseIngredients, analyzeIngredients } from '@/utils/healthAnalyzer';
 import { useCamera } from '@/hooks/useCamera';
 import { performOCR, extractIngredientsFromText } from '@/utils/ocrService';
-import { fetchProductByBarcode, sampleBarcodes } from '@/services/barcodeService';
+import { fetchWithFallback, sampleBarcodes } from '@/services/barcodeService';
 
 type InputMode = null | 'camera' | 'barcode' | 'upload' | 'manual';
 
@@ -90,7 +90,7 @@ export default function Dashboard() {
     setIsProcessing(true);
     
     try {
-      const result = await fetchProductByBarcode(barcodeInput);
+      const result = await fetchWithFallback(barcodeInput);
       
       if (result.success && result.product) {
         toast.success(`Found: ${result.product.name} (${result.product.brand})`);
@@ -303,17 +303,18 @@ export default function Dashboard() {
                       inputMode="numeric"
                     />
                     
-                    {/* Sample barcodes */}
+                    {/* Sample barcodes - show more */}
                     <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">Try these sample barcodes:</p>
+                      <p className="text-xs text-muted-foreground">Try these sample barcodes (click to select):</p>
                       <div className="flex flex-wrap gap-2">
-                        {sampleBarcodes.slice(0, 4).map((sample) => (
+                        {sampleBarcodes.slice(0, 6).map((sample) => (
                           <button
                             key={sample.barcode}
                             onClick={() => setBarcodeInput(sample.barcode)}
-                            className="text-xs px-2 py-1 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
+                            className="text-xs px-3 py-1.5 rounded-full bg-gradient-to-r from-secondary to-secondary/80 text-secondary-foreground hover:from-primary/20 hover:to-accent/20 transition-all duration-300 border border-border/50 shadow-sm"
                           >
-                            {sample.name}
+                            <span className="font-medium">{sample.name}</span>
+                            <span className="text-muted-foreground ml-1">({sample.region})</span>
                           </button>
                         ))}
                       </div>
