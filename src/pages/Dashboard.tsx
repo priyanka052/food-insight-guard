@@ -264,6 +264,18 @@ export default function Dashboard() {
                 />
               ))}
             </div>
+
+            {/* Project Report Link */}
+            <div className="mt-8 text-center">
+              <Button
+                variant="outline"
+                onClick={() => navigate('/project-report')}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                View Project Report (PDF)
+              </Button>
+            </div>
           </div>
         ) : (
           // Input/Preview screen
